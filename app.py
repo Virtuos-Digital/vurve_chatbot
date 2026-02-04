@@ -82,4 +82,5 @@ def health():
     return jsonify({'status': 'ok'}), 200
 
 if __name__ == '__main__':
+    # For local development only. For production, use a WSGI server like Gunicorn.
     app.run(debug=True, host='0.0.0.0', port=5000)
