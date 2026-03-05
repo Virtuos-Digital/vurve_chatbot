@@ -44,7 +44,7 @@ def store_user_message_to_redis(redis_client: redis.Redis, user_uuid: str, messa
     """Store user message to Redis as simple string."""
     if not redis_client:
         logger("Redis client not available, skipping message storage", LOG_TYPES.WARNING)
-        raise Exception("Redis client not available")  
+        return False  
         
     try:
         # Store as simple string format: "user_message: <msg>"

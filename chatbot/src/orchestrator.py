@@ -33,12 +33,16 @@ async def classify_message_intent(state: AgentState) -> AgentState:
     new_state: AgentState = copy.deepcopy(state)
     
     try:
-        store_user_message_to_redis(
+        stored_t0_redis = store_user_message_to_redis(
             redis_client,
             state["user_uuid"], 
             state["last_user_message"], 
             "user_message"
         )
+
+        if(not stored_t0_redis):
+            logger("Failed to store user message to Redis", LOG_TYPES.WARNING)
+            raise Exception("Failed to store user message to Redis")
 
         url = os.getenv("INTENT_CLASSIFIER_API_URL")
         if not url:
