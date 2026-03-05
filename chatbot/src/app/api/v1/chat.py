@@ -1,5 +1,5 @@
 """
-FastAPI Chat Endpoint - Hands control to LangGraph
+FastAPI Chat Endpoint
 """
 import uvicorn
 from fastapi import FastAPI, Response
@@ -16,10 +16,7 @@ app = FastAPI(
 @app.post("/api/v1/talk")
 async def talk(request: ChatRequest, response: Response):
     """
-    Chat endpoint - hands control to LangGraph workflow and extracts response.
-    
-    LangGraph will process the request and return {status: <>, response: <>} in state data.
-    This route extracts those values and handles the HTTP response.
+    Chat endpoint
     """
     
     logger(f"Received chat request from user: {request.user_uuid}", LOG_TYPES.INFORMATION)
