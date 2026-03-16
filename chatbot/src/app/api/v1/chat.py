@@ -3,7 +3,7 @@ FastAPI Chat Endpoint
 """
 import uvicorn
 from fastapi import FastAPI, Response
-from src.types.api import ChatRequest, ChatResponse
+from src.api_types.api import ChatRequest, ChatResponse
 from src.orchestrator import bot
 from src.logger import LOG_TYPES, logger
 
