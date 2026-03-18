@@ -85,11 +85,11 @@ async def vector_search_products(query_text: str, top_k: int = 5) -> List[str]:
             return []
         
         # Connect to vector database
-        db_host = os.getenv("VECTOR_DB_HOST", "localhost")
-        db_port = int(os.getenv("VECTOR_DB_PORT", "5432"))
-        db_name = os.getenv("VECTOR_DB_NAME", "postres2")
-        db_user = os.getenv("VECTOR_DB_USER", "postgres")
-        db_password = os.getenv("VECTOR_DB_PASSWORD", "")
+        db_host = os.getenv("VECTOR_DB_HOST")
+        db_port = int(os.getenv("VECTOR_DB_PORT"))
+        db_name = os.getenv("VECTOR_DB_NAME")
+        db_user = os.getenv("VECTOR_DB_USER")
+        db_password = os.getenv("VECTOR_DB_PASSWORD")
         
         # Build connection kwargs (handle empty password)
         conn_kwargs = {
