@@ -66,14 +66,14 @@ async def store_user_message_to_redis(redis_client: redis.Redis, user_uuid: str,
         logger(f"Failed to store message to Redis: {e}", LOG_TYPES.ERROR)
         return False
 
-async def get_user_chat_context(redis_client: redis.Redis, user_uuid: str, limit: int = 10) -> list|None:
+async def get_user_chat_context(redis_client: redis.Redis, user_uuid: str) -> list|None:
     """Get user chat context from Redis."""
     if not redis_client:
         return None
         
     try:
         redis_key = f"user_chat:{user_uuid}"
-        messages = await redis_client.lrange(redis_key, 0, limit - 1)
+        messages = await redis_client.lrange(redis_key, 0, -1)
         return messages  
     except Exception as e:
         logger(f"Failed to get chat context from Redis: {e}", LOG_TYPES.ERROR)

@@ -12,6 +12,7 @@ from langgraph.graph import StateGraph, END, START
 from src.logger import LOG_TYPES, logger
 from src.redis_utils import test_redis_connection, get_redis_client, store_user_message_to_redis, get_user_chat_context
 from src.types.api import ChatResponse
+from src.aws_utils import retrieve_from_knowledge_base
 load_dotenv()
 
 if "TEST_VARIABLE" in os.environ:
@@ -215,7 +216,12 @@ async def answer_general_query(state: AgentState) -> AgentState:
             raise Exception("Failed to retrieve context from redis")
         
         # Parse Redis messages into OpenAI message format
-        messages = []
+        # Add system message first (O(1) instead of O(n) insert)
+        messages = [{
+            "role": "system", 
+            "content": "You are a professional customer service assistant. Be polite, helpful, and concise in your responses.\n\nGuidelines:\n- Answer questions using the information from the knowledge base when available\n- If the knowledge base has no relevant information, engage in friendly general conversation\n- Never fabricate product details, policies, or company information\n- If unsure about specific company information, politely state you don't have that information\n- Keep responses brief and to the point"
+        }]
+        
         for msg in context:
             if msg.startswith("user_message: "):
                 content = msg.replace("user_message: ", "", 1)
@@ -223,12 +229,10 @@ async def answer_general_query(state: AgentState) -> AgentState:
             elif msg.startswith("bot_response: "):
                 content = msg.replace("bot_response: ", "", 1)
                 messages.append({"role": "assistant", "content": content})
-        
-        # Add system message at the beginning
-        messages.insert(0, {
-            "role": "system", 
-            "content": "You are a helpful customer service assistant. Answer questions about products, company policies, and general inquiries based on the conversation history."
-        })
+
+        data_from_kb = await retrieve_from_knowledge_base(state["last_user_message"])
+        messages.append({"role": "system", "content": f"Information retrieved from knowledge base:\n{data_from_kb}"})
+        logger(f"Retrieved data from KB: {data_from_kb}", LOG_TYPES.INFORMATION)
         
         logger(f"Prepared {len(messages)} messages for LLM", LOG_TYPES.INFORMATION)
         
