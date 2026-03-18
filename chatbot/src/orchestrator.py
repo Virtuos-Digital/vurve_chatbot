@@ -13,6 +13,7 @@ from src.logger import LOG_TYPES, logger
 from src.redis_utils import test_redis_connection, get_redis_client, store_user_message_to_redis, get_user_chat_context
 from src.types.api import ChatResponse
 from src.aws_utils import retrieve_from_knowledge_base
+from src.vector_search import vector_search_products
 load_dotenv()
 
 if "TEST_VARIABLE" in os.environ:
@@ -110,23 +111,34 @@ def route_after_classification(state: AgentState) -> str:
     return classified_intent
     
 async def recommend_product(state: AgentState) -> AgentState:
-    """Recommend a product based on the message."""
+    """Recommend a product based on the message using vector search."""
 
     new_state: AgentState = copy.deepcopy(state)
     
     logger(f"Recommending product for message: '{state['last_user_message']}'", LOG_TYPES.INFORMATION)
     
-    # Generate product recommendation based on message
-    bot_message = f"I recommend checking out our premium products for '{state['last_user_message']}'. Here are some great options!"
-    
-    # Store the bot message in state for response
-    new_state['data']['bot_message'] = bot_message
-    
     try:
         # Ensure Redis client is initialized
         redis_client = await initialize_redis()
         
-        # Store the bot response to Redis as well
+        # Perform vector search to find relevant products
+        product_ids = await vector_search_products(state['last_user_message'], top_k=5)
+        
+        if product_ids:
+            # Generate bot message with product recommendations
+            product_list = ", ".join(product_ids)
+            bot_message = f"I found these products that might interest you: {product_list}"
+            
+            # Store product IDs in state for API response
+            new_state['data']['recommended_products'] = product_ids
+        else:
+            bot_message = "I couldn't find specific products matching your request. Let me help you browse our catalog!"
+            new_state['data']['recommended_products'] = []
+        
+        # Store the bot message in state for response
+        new_state['data']['bot_message'] = bot_message
+        
+        # Store the bot response to Redis
         await store_user_message_to_redis(
             redis_client,
             state["user_uuid"], 
@@ -135,9 +147,24 @@ async def recommend_product(state: AgentState) -> AgentState:
         )
 
         logger(f"Product recommendation generated for user: '{state['user_uuid']}'", LOG_TYPES.SUCCESS)
+        
     except Exception as e:
-        logger(f"Failed to store bot response to Redis: {e}", LOG_TYPES.ERROR)
+        logger(f"Error during product recommendation: {e}", LOG_TYPES.ERROR)
+        new_state['data']['bot_message'] = "Sorry, I encountered an error while searching for products."
+        new_state['data']['recommended_products'] = []
     
+    return new_state
+
+async def handle_order_tracking(state: AgentState) -> AgentState:
+    new_state: AgentState = copy.deepcopy(state)
+    new_state['data']['bot_message'] = "Your order is being processed."
+    await store_user_message_to_redis(redis_client, state['user_uuid'], new_state['data']['bot_message'], "bot_response")
+    return new_state
+
+async def handle_escalation(state: AgentState) -> AgentState:
+    new_state: AgentState = copy.deepcopy(state)
+    new_state['data']['bot_message'] = f"Support ticket created. An agent will assist you."
+    await store_user_message_to_redis(redis_client, state['user_uuid'], new_state['data']['bot_message'], "bot_response")
     return new_state
 
 def send_response_to_user(state: AgentState) -> AgentState:
@@ -329,6 +356,8 @@ async def answer_general_query(state: AgentState) -> AgentState:
 graph = StateGraph(AgentState)
 graph.add_node("intent_classifier", classify_message_intent)
 graph.add_node("product_recommender", recommend_product)
+graph.add_node("order_tracker", handle_order_tracking)
+graph.add_node("escalation_handler", handle_escalation)
 graph.add_node("send_response_to_user", send_response_to_user)
 graph.add_node("answer_general_query", answer_general_query)
 
@@ -338,12 +367,16 @@ graph.add_conditional_edges(
     route_after_classification,
     {
         "Product recommendation": "product_recommender",
+        "Track order/order status (login required)": "order_tracker",
         "General conversation/company policy": "answer_general_query",
+        "Escalate to human agent": "escalation_handler",
         "error": "send_response_to_user"
     }
 )
 graph.add_edge("product_recommender", "send_response_to_user")
+graph.add_edge("order_tracker", "send_response_to_user")
 graph.add_edge("answer_general_query", "send_response_to_user")
+graph.add_edge("escalation_handler", "send_response_to_user")
 graph.add_edge("send_response_to_user", END)
 
 bot = graph.compile()
